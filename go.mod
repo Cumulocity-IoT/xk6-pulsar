@@ -1,4 +1,4 @@
-module xk6-pulsar
+module github.com/Cumulocity-IoT/xk6-pulsar
 
 go 1.24
 
