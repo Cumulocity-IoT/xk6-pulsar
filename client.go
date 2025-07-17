@@ -268,6 +268,8 @@ func (m *PulsarAPI) defineRuntimeMethods(client *client) {
 	must(client.obj.DefineDataProperty(
 		"connect", rt.ToValue(client.Connect), sobek.FLAG_FALSE, sobek.FLAG_FALSE, sobek.FLAG_TRUE))
 	must(client.obj.DefineDataProperty(
+		"isConnected", rt.ToValue(client.IsConnected), sobek.FLAG_FALSE, sobek.FLAG_FALSE, sobek.FLAG_TRUE))
+	must(client.obj.DefineDataProperty(
 		"publish", rt.ToValue(client.Publish), sobek.FLAG_FALSE, sobek.FLAG_FALSE, sobek.FLAG_TRUE))
 	must(client.obj.DefineDataProperty(
 		"publishAsyncForDuration", rt.ToValue(client.PublishAsyncForDuration), sobek.FLAG_FALSE, sobek.FLAG_FALSE, sobek.FLAG_TRUE))
@@ -383,6 +385,14 @@ func (c *client) Close() {
 		c.pulsarClient.Close()
 		c.pulsarClient = nil
 	}
+}
+
+// IsConnected the given client
+func (c *client) IsConnected() bool {
+	if c.pulsarClient == nil {
+		return false
+	}
+	return true
 }
 
 // error event for async
