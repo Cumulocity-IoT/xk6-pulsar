@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -198,7 +199,7 @@ func (m *PulsarAPI) client(c sobek.ConstructorCall) *sobek.Object {
 	skipTLS := c.Argument(9)
 	clientConf.skipTLSValidation = skipTLS.ToBoolean()
 
-	if tlsMinVersionValue := c.Argument(10); tlsMinVersionValue == nil || sobek.IsUndefined(tlsMinVersionValue) {
+	if tlsMinVersionValue := c.Argument(10); tlsMinVersionValue == nil || sobek.IsUndefined(tlsMinVersionValue) || tlsMinVersionValue.ExportType().Kind() == reflect.Invalid {
 		clientConf.tlsMinVersion = tls.VersionTLS13
 	} else {
 		tlsMinVersion, err := tlsVersionStringToNumber(tlsMinVersionValue.String())
