@@ -52,7 +52,7 @@ type conf struct {
 	password string
 	// Authentication token
 	authenticationToken string
-	// connectTimeout ms
+	// connectTimeout in ms
 	connectTimeout uint
 	// path to caRoot path
 	caRootPath string
@@ -64,7 +64,7 @@ type conf struct {
 	skipTLSValidation bool
 	// configure tls min version
 	tlsMinVersion uint16
-	// publishTimeout  ms
+	// publishTimeout in ms
 	publishTimeout uint
 	// subscriptionInitialPosition is the initial position at which the cursor will be set when subscribe
 	// Default is `Latest`
