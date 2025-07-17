@@ -13,9 +13,6 @@ import (
 )
 
 func (c *client) createConsumerIfNotPresent(topic, topicsPattern string) (pulsar.Consumer, error) {
-	c.pulsarConsumersMU.Lock()
-	defer c.pulsarConsumersMU.Unlock()
-
 	if topic != "" && topicsPattern != "" {
 		return nil, fmt.Errorf("both topic and topicsPattern are set, only one should be used")
 	}
@@ -27,21 +24,30 @@ func (c *client) createConsumerIfNotPresent(topic, topicsPattern string) (pulsar
 		consumerKey = topic
 	}
 
-	consumer, ok := c.pulsarConsumers[consumerKey]
+	var err error
+	var ok bool
+	var consumer pulsar.Consumer
+	consumer, ok = c.pulsarConsumers[consumerKey]
 	if !ok {
-		opts := pulsar.ConsumerOptions{
-			Topic:            topic,
-			TopicsPattern:    topicsPattern,
-			Name:             c.conf.name,
-			SubscriptionName: c.conf.name,
-		}
+		c.pulsarConsumersMU.Lock()
+		defer c.pulsarConsumersMU.Unlock()
 
-		consumer, err := c.pulsarClient.Subscribe(opts)
-		if err != nil {
-			return nil, err
-		}
+		consumer, ok = c.pulsarConsumers[consumerKey]
+		if !ok {
+			opts := pulsar.ConsumerOptions{
+				Topic:            topic,
+				TopicsPattern:    topicsPattern,
+				Name:             c.conf.name,
+				SubscriptionName: c.conf.name,
+			}
 
-		c.pulsarConsumers[consumerKey] = consumer
+			consumer, err = c.pulsarClient.Subscribe(opts)
+			if err != nil {
+				return nil, err
+			}
+
+			c.pulsarConsumers[consumerKey] = consumer
+		}
 	}
 
 	return consumer, nil
@@ -60,10 +66,6 @@ func (c *client) Subscribe(
 		err = errors.Join(ErrConnect, err)
 		common.Throw(rt, err)
 		return err
-	}
-	if consumer == nil {
-		err = errors.New(fmt.Sprintf("consumer for topic %s or topicsPattrn %s is nil, this should not happen", topic, topicsPattern))
-		common.Throw(rt, err)
 	}
 
 	registerCallback := func() func(func() error) {

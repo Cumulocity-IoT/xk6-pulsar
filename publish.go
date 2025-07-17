@@ -12,23 +12,30 @@ import (
 )
 
 func (c *client) createProducerIfNotPresent(topic string) (pulsar.Producer, error) {
-	c.pulsarProducersMU.Lock()
-	defer c.pulsarProducersMU.Unlock()
+	var err error
+	var ok bool
+	var producer pulsar.Producer
 
-	producer, ok := c.pulsarProducers[topic]
+	producer, ok = c.pulsarProducers[topic]
 	if !ok {
-		opts := pulsar.ProducerOptions{
-			Topic:       topic,
-			Name:        c.conf.name,
-			SendTimeout: time.Duration(c.conf.publishTimeout) * time.Millisecond,
-		}
+		c.pulsarProducersMU.Lock()
+		defer c.pulsarProducersMU.Unlock()
 
-		producer, err := c.pulsarClient.CreateProducer(opts)
-		if err != nil {
-			return nil, err
-		}
+		producer, ok = c.pulsarProducers[topic]
+		if !ok {
+			opts := pulsar.ProducerOptions{
+				Topic:       topic,
+				Name:        c.conf.name,
+				SendTimeout: time.Duration(c.conf.publishTimeout) * time.Millisecond,
+			}
 
-		c.pulsarProducers[topic] = producer
+			producer, err = c.pulsarClient.CreateProducer(opts)
+			if err != nil {
+				return nil, err
+			}
+
+			c.pulsarProducers[topic] = producer
+		}
 	}
 
 	return producer, nil
