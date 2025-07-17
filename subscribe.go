@@ -61,6 +61,10 @@ func (c *client) Subscribe(
 		common.Throw(rt, err)
 		return err
 	}
+	if consumer == nil {
+		err = errors.New(fmt.Sprintf("consumer for topic %s or topicsPattrn %s is nil, this should not happen", topic, topicsPattern))
+		common.Throw(rt, err)
+	}
 
 	registerCallback := func() func(func() error) {
 		callback := c.vu.RegisterCallback()
