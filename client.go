@@ -230,6 +230,11 @@ func (m *PulsarAPI) client(c sobek.ConstructorCall) *sobek.Object {
 		metrics: &metrics,
 		conf:    clientConf,
 		obj:     rt.NewObject(),
+
+		pulsarProducers:   make(map[string]pulsar.Producer),
+		pulsarProducersMU: sync.Mutex{},
+		pulsarConsumers:   make(map[string]pulsar.Consumer),
+		pulsarConsumersMU: sync.Mutex{},
 	}
 
 	m.defineRuntimeMethods(client)
