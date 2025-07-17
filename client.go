@@ -147,49 +147,48 @@ func (m *PulsarAPI) client(c sobek.ConstructorCall) *sobek.Object {
 
 	var clientConf conf
 	serverURL := c.Argument(0)
-	if serverURL == nil || sobek.IsUndefined(serverURL) {
+	if isNilOrUndefined(serverURL) {
 		common.Throw(rt, errors.New("Client requires a server URL"))
 	}
 	clientConf.serverURL = serverURL.String()
 	name := c.Argument(1)
-	if name == nil || sobek.IsUndefined(name) {
+	if isNilOrUndefined(name) {
 		common.Throw(rt, errors.New("Client requires a name"))
 	}
 	clientConf.name = name.String()
 
 	// optional args
 	userValue := c.Argument(2)
-	if userValue != nil && !sobek.IsUndefined(userValue) {
+	if !isNilOrUndefined(userValue) {
 		clientConf.user = userValue.String()
 	}
 	passwordValue := c.Argument(3)
-	if passwordValue != nil && !sobek.IsUndefined(passwordValue) {
+	if !isNilOrUndefined(passwordValue) {
 		clientConf.password = passwordValue.String()
 	}
 	authenticationToken := c.Argument(4)
-	if authenticationToken != nil && !sobek.IsUndefined(authenticationToken) {
+	if !isNilOrUndefined(authenticationToken) {
 		clientConf.authenticationToken = authenticationToken.String()
 	}
 	connectTimeoutValue := c.Argument(5)
-	if connectTimeoutValue != nil && !sobek.IsUndefined(connectTimeoutValue) {
+	if !isNilOrUndefined(connectTimeoutValue) {
 		connectTimeoutIntValue := connectTimeoutValue.ToInteger()
 		if connectTimeoutIntValue < 0 {
 			common.Throw(rt, errors.New("negative timeout value is not allowed"))
 		}
 		clientConf.connectTimeout = uint(connectTimeoutIntValue)
 	}
-	if caRootPathValue := c.Argument(6); caRootPathValue == nil || sobek.IsUndefined(caRootPathValue) {
+	if caRootPathValue := c.Argument(6); isNilOrUndefined(caRootPathValue) {
 		clientConf.caRootPath = ""
 	} else {
 		clientConf.caRootPath = caRootPathValue.String()
 	}
-	if clientCertPathValue := c.Argument(7); clientCertPathValue == nil || sobek.IsUndefined(clientCertPathValue) {
+	if clientCertPathValue := c.Argument(7); isNilOrUndefined(clientCertPathValue) {
 		clientConf.clientCertPath = ""
 	} else {
 		clientConf.clientCertPath = clientCertPathValue.String()
 	}
-	if clientCertKeyPathValue := c.Argument(8); clientCertKeyPathValue == nil ||
-		sobek.IsUndefined(clientCertKeyPathValue) {
+	if clientCertKeyPathValue := c.Argument(8); isNilOrUndefined(clientCertKeyPathValue) {
 		clientConf.clientCertKeyPath = ""
 	} else {
 		clientConf.clientCertKeyPath = clientCertKeyPathValue.String()
@@ -198,7 +197,7 @@ func (m *PulsarAPI) client(c sobek.ConstructorCall) *sobek.Object {
 	skipTLS := c.Argument(9)
 	clientConf.skipTLSValidation = skipTLS.ToBoolean()
 
-	if tlsMinVersionValue := c.Argument(10); tlsMinVersionValue == nil || sobek.IsUndefined(tlsMinVersionValue) || tlsMinVersionValue.Export() == nil {
+	if tlsMinVersionValue := c.Argument(10); isNilOrUndefined(tlsMinVersionValue) {
 		clientConf.tlsMinVersion = tls.VersionTLS13
 	} else {
 		tlsMinVersion, err := tlsVersionStringToNumber(tlsMinVersionValue.String())
@@ -210,7 +209,7 @@ func (m *PulsarAPI) client(c sobek.ConstructorCall) *sobek.Object {
 	}
 
 	publishTimeoutValue := c.Argument(11)
-	if publishTimeoutValue != nil && !sobek.IsUndefined(publishTimeoutValue) {
+	if !isNilOrUndefined(publishTimeoutValue) {
 		publishTimeoutIntValue := publishTimeoutValue.ToInteger()
 		if publishTimeoutIntValue < 0 {
 			common.Throw(rt, errors.New("negative timeout value is not allowed"))
@@ -219,7 +218,7 @@ func (m *PulsarAPI) client(c sobek.ConstructorCall) *sobek.Object {
 	}
 
 	subscriptionInitialPositionValue := c.Argument(12)
-	if subscriptionInitialPositionValue != nil && !sobek.IsUndefined(subscriptionInitialPositionValue) {
+	if !isNilOrUndefined(subscriptionInitialPositionValue) {
 		clientConf.subscriptionInitialPosition = stringToSubscriptionInitialPosition(subscriptionInitialPositionValue.String())
 	} else {
 		clientConf.subscriptionInitialPosition = pulsar.SubscriptionPositionLatest // default to true, which is Latest
@@ -246,6 +245,14 @@ func (m *PulsarAPI) client(c sobek.ConstructorCall) *sobek.Object {
 	m.defineRuntimeMethods(client)
 
 	return client.obj
+}
+
+func isNilOrUndefined(v sobek.Value) bool {
+	if v == nil || v.Export() == nil || sobek.IsUndefined(v) {
+		return true
+	}
+
+	return false
 }
 
 // StringToSubscriptionInitialPosition converts a string to a SubscriptionInitialPosition constant.
