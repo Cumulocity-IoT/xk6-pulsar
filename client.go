@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -66,9 +65,6 @@ type conf struct {
 	tlsMinVersion uint16
 	// publishTimeout in ms
 	publishTimeout uint
-	// subscriptionInitialPosition is the initial position at which the cursor will be set when subscribe
-	// Default is `Latest`
-	subscriptionInitialPosition pulsar.SubscriptionInitialPosition
 }
 
 const (
@@ -217,13 +213,6 @@ func (m *PulsarAPI) client(c sobek.ConstructorCall) *sobek.Object {
 		clientConf.publishTimeout = uint(publishTimeoutIntValue)
 	}
 
-	subscriptionInitialPositionValue := c.Argument(12)
-	if !isNilOrUndefined(subscriptionInitialPositionValue) {
-		clientConf.subscriptionInitialPosition = stringToSubscriptionInitialPosition(subscriptionInitialPositionValue.String())
-	} else {
-		clientConf.subscriptionInitialPosition = pulsar.SubscriptionPositionLatest // default to true, which is Latest
-	}
-
 	labels := getLabels(c.Argument(13), rt)
 	metrics, err := registerMetrics(m.vu, labels)
 	if err != nil {
@@ -253,23 +242,6 @@ func isNilOrUndefined(v sobek.Value) bool {
 	}
 
 	return false
-}
-
-// StringToSubscriptionInitialPosition converts a string to a SubscriptionInitialPosition constant.
-// It returns the corresponding constant.
-func stringToSubscriptionInitialPosition(s string) pulsar.SubscriptionInitialPosition {
-	// Convert the input string to lowercase for case-insensitive matching
-	lowerS := strings.ToLower(s)
-
-	switch lowerS {
-	case "latest":
-		return pulsar.SubscriptionPositionLatest
-	case "earliest":
-		return pulsar.SubscriptionPositionEarliest
-	default:
-		// If the string doesn't match any known constant, return pulsar.SubscriptionPositionLatest value
-		return pulsar.SubscriptionPositionLatest
-	}
 }
 
 func (m *PulsarAPI) defineRuntimeMethods(client *client) {

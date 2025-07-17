@@ -3,6 +3,7 @@ package pulsar
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/apache/pulsar-client-go/pulsar"
@@ -12,7 +13,7 @@ import (
 	"go.k6.io/k6/metrics"
 )
 
-func (c *client) createConsumerIfNotPresent(topic, topicsPattern string) (pulsar.Consumer, error) {
+func (c *client) createConsumerIfNotPresent(topic, topicsPattern, subscriptionType, initialPosition string) (pulsar.Consumer, error) {
 	if topic != "" && topicsPattern != "" {
 		return nil, fmt.Errorf("both topic and topicsPattern are set, only one should be used")
 	}
@@ -35,10 +36,12 @@ func (c *client) createConsumerIfNotPresent(topic, topicsPattern string) (pulsar
 		consumer, ok = c.pulsarConsumers[consumerKey]
 		if !ok {
 			opts := pulsar.ConsumerOptions{
-				Topic:            topic,
-				TopicsPattern:    topicsPattern,
-				Name:             c.conf.name,
-				SubscriptionName: c.conf.name,
+				Topic:                       topic,
+				TopicsPattern:               topicsPattern,
+				Name:                        c.conf.name,
+				SubscriptionName:            c.conf.name,
+				Type:                        stringToSubscriptionType(subscriptionType),
+				SubscriptionInitialPosition: stringToSubscriptionInitialPosition(initialPosition),
 			}
 
 			consumer, err = c.pulsarClient.Subscribe(opts)
@@ -59,9 +62,13 @@ func (c *client) Subscribe(
 	topic string,
 	// A regular expression to subscribe to multiple topics under the same namespace
 	topicsPattern string,
+	// Subscription type, can be "exclusive", "shared", "failover" or "keyshared" (defaults to "keyshared")
+	subscriptionType string,
+	// Initial position of the cursor, can be "earliest" or "latest" (defaults to "latest")
+	initialPosition string,
 ) error {
 	rt := c.vu.Runtime()
-	consumer, err := c.createConsumerIfNotPresent(topic, topicsPattern)
+	consumer, err := c.createConsumerIfNotPresent(topic, topicsPattern, subscriptionType, initialPosition)
 	if err != nil {
 		err = errors.Join(ErrConnect, err)
 		common.Throw(rt, err)
@@ -194,4 +201,42 @@ func (c *client) newMessageEvent(topic, msg string) *sobek.Object {
 	must(o.DefineDataProperty("topic", rt.ToValue(topic), sobek.FLAG_FALSE, sobek.FLAG_FALSE, sobek.FLAG_TRUE))
 	must(o.DefineDataProperty("message", rt.ToValue(msg), sobek.FLAG_FALSE, sobek.FLAG_FALSE, sobek.FLAG_TRUE))
 	return o
+}
+
+// stringToSubscriptionType converts a string to a SubscriptionType constant.
+// It returns the corresponding constant.
+func stringToSubscriptionType(s string) pulsar.SubscriptionType {
+	// Convert the input string to lowercase for case-insensitive matching
+	lowerS := strings.ToLower(s)
+
+	switch lowerS {
+	case "exclusive":
+		return pulsar.Exclusive
+	case "shared":
+		return pulsar.Shared
+	case "failover":
+		return pulsar.Failover
+	case "keyshared":
+		return pulsar.KeyShared
+	default:
+		// If the string doesn't match any known constant, return pulsar.KeyShared value
+		return pulsar.KeyShared
+	}
+}
+
+// stringToSubscriptionInitialPosition converts a string to a SubscriptionInitialPosition constant.
+// It returns the corresponding constant.
+func stringToSubscriptionInitialPosition(s string) pulsar.SubscriptionInitialPosition {
+	// Convert the input string to lowercase for case-insensitive matching
+	lowerS := strings.ToLower(s)
+
+	switch lowerS {
+	case "earliest":
+		return pulsar.SubscriptionPositionEarliest
+	case "latest":
+		return pulsar.SubscriptionPositionLatest
+	default:
+		// If the string doesn't match any known constant, return pulsar.SubscriptionPositionLatest value
+		return pulsar.SubscriptionPositionLatest
+	}
 }
