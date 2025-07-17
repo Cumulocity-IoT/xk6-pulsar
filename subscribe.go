@@ -27,7 +27,7 @@ func (c *client) createConsumerIfNotPresent(topic, topicsPattern string) (pulsar
 		consumerKey = topic
 	}
 
-	consumer, ok := c.pulsarConsumers[topic]
+	consumer, ok := c.pulsarConsumers[consumerKey]
 	if !ok {
 		opts := pulsar.ConsumerOptions{
 			Topic:            topic,
