@@ -62,8 +62,6 @@ func (c *client) Subscribe(
 		return err
 	}
 
-	consumer.Close()
-
 	registerCallback := func() func(func() error) {
 		callback := c.vu.RegisterCallback()
 		return func(f func() error) {
