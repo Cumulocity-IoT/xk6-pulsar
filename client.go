@@ -77,6 +77,7 @@ const (
 	sentMessagesCountLabel     = "pulsar_sent_messages_count"
 	receivedMessagesCountLabel = "pulsar_received_messages_count"
 	sentDatesLabel             = "pulsar_sent_messages_dates"
+	receivedDatesLabel         = "pulsar_received_messages_dates"
 )
 
 func getLabels(labelsArg sobek.Value, rt *sobek.Runtime) pulsarMetricsLabels {
@@ -89,6 +90,7 @@ func getLabels(labelsArg sobek.Value, rt *sobek.Runtime) pulsarMetricsLabels {
 		labels.SentMessagesCountLabel = sentMessagesCountLabel
 		labels.ReceivedMessagesCountLabel = receivedMessagesCountLabel
 		labels.SentDatesLabel = sentDatesLabel
+		labels.ReceivedDatesLabel = receivedDatesLabel
 		return labels
 	}
 

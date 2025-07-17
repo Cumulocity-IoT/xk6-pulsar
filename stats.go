@@ -13,6 +13,7 @@ type pulsarMetrics struct {
 	SentMessages     *metrics.Metric
 	ReceivedMessages *metrics.Metric
 	SentDates        *metrics.Metric
+	ReceivedDates    *metrics.Metric
 	TagsAndMeta      *metrics.TagsAndMeta
 }
 
@@ -22,6 +23,7 @@ type pulsarMetricsLabels struct {
 	SentMessagesCountLabel     string
 	ReceivedMessagesCountLabel string
 	SentDatesLabel             string
+	ReceivedDatesLabel         string
 }
 
 // registerMetrics registers the metrics for the pulsar module in the metrics registry
@@ -58,6 +60,11 @@ func registerMetrics(vu modules.VU, labels pulsarMetricsLabels) (pulsarMetrics, 
 	}
 
 	m.SentDates, err = registry.NewMetric(labels.SentDatesLabel, metrics.Gauge)
+	if err != nil {
+		return m, err
+	}
+
+	m.ReceivedDates, err = registry.NewMetric(labels.ReceivedDatesLabel, metrics.Gauge)
 	if err != nil {
 		return m, err
 	}
