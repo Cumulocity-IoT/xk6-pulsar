@@ -91,7 +91,6 @@ func (c *client) subscriptionLoop(topic, topicsPattern, subscriptionType, initia
 				// wanted exit in case of chan close
 				return nil
 			}
-			payload := string(msg.Payload())
 
 			// ACK the message
 			if err := consumer.Ack(msg); err != nil {
@@ -105,12 +104,13 @@ func (c *client) subscriptionLoop(topic, topicsPattern, subscriptionType, initia
 			}
 
 			// publish associated metric
-			err := c.receiveMessageMetric(float64(len(payload)))
+			err := c.receiveMessageMetric(float64(len(msg.Payload())))
 			if err != nil {
 				return err
 			}
 
 			if c.messageListener != nil {
+				payload := string(msg.Payload())
 				ev := c.newMessageEvent(msg.Topic(), payload)
 				if _, err := c.messageListener(ev); err != nil {
 					return err
