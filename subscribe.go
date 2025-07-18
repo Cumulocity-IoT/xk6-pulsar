@@ -8,7 +8,6 @@ import (
 
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/grafana/sobek"
-	"github.com/mstoykov/k6-taskqueue-lib/taskqueue"
 	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/metrics"
 )
@@ -78,17 +77,7 @@ func (c *client) subscriptionLoop(topic, topicsPattern, subscriptionType, initia
 		return err
 	}
 
-	registerCallback := func() func(func() error) {
-		callback := c.vu.RegisterCallback()
-		return func(f func() error) {
-			callback(f)
-		}
-	}
-	c.tq = taskqueue.New(registerCallback)
-	defer c.tq.Close()
-
 	ctx := c.vu.Context()
-	stop := make(chan struct{})
 
 	var timeoutChan <-chan time.Time
 	if c.subDuration > 0 {
@@ -102,66 +91,54 @@ func (c *client) subscriptionLoop(topic, topicsPattern, subscriptionType, initia
 				// wanted exit in case of chan close
 				return nil
 			}
-			c.tq.Queue(func() error {
-				payload := string(msg.Payload())
+			payload := string(msg.Payload())
 
-				// ACK the message
-				if err := consumer.Ack(msg); err != nil {
-					if c.errorListener != nil {
-						ev := c.newErrorEvent(fmt.Errorf("failed to ack message: %w", err).Error())
-						if _, err := c.errorListener(ev); err != nil {
-							// only seen in case of sigint
-							return err
-						}
-					}
-				}
-
-				// publish associated metric
-				err := c.receiveMessageMetric(float64(len(payload)))
-				if err != nil {
-					return err
-				}
-
-				if c.messageListener != nil {
-					ev := c.newMessageEvent(msg.Topic(), payload)
-					if _, err := c.messageListener(ev); err != nil {
-						return err
-					}
-				}
-
-				// if the client is waiting for multiple messages
-				// TODO handle multiple // subscribe case
-				if c.subRefCount > 0 {
-					c.subRefCount--
-				} else {
-					// exit the handle from evloop async
-					stop <- struct{}{}
-				}
-
-				return nil
-			})
-		case <-stop:
-			return nil
-		case <-ctx.Done():
-			c.tq.Queue(func() error {
+			// ACK the message
+			if err := consumer.Ack(msg); err != nil {
 				if c.errorListener != nil {
-					ev := c.newErrorEvent("message vu cancel occurred")
+					ev := c.newErrorEvent(fmt.Errorf("failed to ack message: %w", err).Error())
 					if _, err := c.errorListener(ev); err != nil {
 						// only seen in case of sigint
 						return err
 					}
 				}
-				return nil
-			})
+			}
+
+			// publish associated metric
+			err := c.receiveMessageMetric(float64(len(payload)))
+			if err != nil {
+				return err
+			}
+
+			if c.messageListener != nil {
+				ev := c.newMessageEvent(msg.Topic(), payload)
+				if _, err := c.messageListener(ev); err != nil {
+					return err
+				}
+			}
+
+			// if the client is waiting for multiple messages
+			// TODO handle multiple // subscribe case
+			if c.subRefCount > 0 {
+				c.subRefCount--
+			} else {
+				return nil // exit the loop if no more messages are expected
+			}
+
+		case <-ctx.Done():
+			if c.errorListener != nil {
+				ev := c.newErrorEvent("message vu cancel occurred")
+				if _, err := c.errorListener(ev); err != nil {
+					// only seen in case of sigint
+					return err
+				}
+			}
+
+			// exit the handle from evloop async
 			return nil
 
 		case <-timeoutChan:
-			c.tq.Queue(func() error {
-				// exit the handle from evloop async
-				stop <- struct{}{}
-
-				return nil
-			})
+			// exit the handle from evloop async
 			return nil
 		}
 	}

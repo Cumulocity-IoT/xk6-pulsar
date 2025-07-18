@@ -12,7 +12,6 @@ import (
 
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/grafana/sobek"
-	"github.com/mstoykov/k6-taskqueue-lib/taskqueue"
 	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/js/modules"
 )
@@ -34,7 +33,6 @@ type client struct {
 	// https://pkg.go.dev/github.com/dop251/goja#hdr-Functions
 	messageListener func(sobek.Value) (sobek.Value, error)
 	errorListener   func(sobek.Value) (sobek.Value, error)
-	tq              *taskqueue.TaskQueue
 
 	subRefCount int64 // reference count for subscribe, used to exit the loop when this count is reached
 	subDuration int64 // duration in milliseconds to keep listening for messages
@@ -351,11 +349,6 @@ func (c *client) Connect() error {
 // Close the given client
 // wait for pending connections for timeout (ms) before closing
 func (c *client) Close() {
-	// exit subscribe task queue if running
-	if c.tq != nil {
-		c.tq.Close()
-	}
-
 	// close producer
 	if c.pulsarProducer != nil {
 		c.pulsarProducer.FlushWithCtx(c.vu.Context())
