@@ -11,36 +11,6 @@ import (
 	"go.k6.io/k6/metrics"
 )
 
-func (c *client) createProducerIfNotPresent(topic string) (pulsar.Producer, error) {
-	var err error
-	var ok bool
-	var producer pulsar.Producer
-
-	producer, ok = c.pulsarProducers[topic]
-	if !ok {
-		c.pulsarProducersMU.Lock()
-		defer c.pulsarProducersMU.Unlock()
-
-		producer, ok = c.pulsarProducers[topic]
-		if !ok {
-			opts := pulsar.ProducerOptions{
-				Topic:       topic,
-				Name:        c.conf.name,
-				SendTimeout: time.Duration(c.conf.publishTimeout) * time.Millisecond,
-			}
-
-			producer, err = c.pulsarClient.CreateProducer(opts)
-			if err != nil {
-				return nil, err
-			}
-
-			c.pulsarProducers[topic] = producer
-		}
-	}
-
-	return producer, nil
-}
-
 // Publish allow to publish one message
 //
 //nolint:gocognit
@@ -59,7 +29,7 @@ func (c *client) Publish(
 	// async case
 	callback := c.vu.RegisterCallback()
 	go func() {
-		publisher, err := c.createProducerIfNotPresent(topic)
+		publisher, err := c.createProducer(topic)
 		if err != nil {
 			callback(func() error {
 				if failure != nil {
@@ -131,7 +101,7 @@ func (c *client) publishSync(
 	messageProperties map[string]string,
 ) error {
 	rt := c.vu.Runtime()
-	publisher, err := c.createProducerIfNotPresent(topic)
+	publisher, err := c.createProducer(topic)
 	if err != nil {
 		err = errors.Join(ErrConnect, err)
 		common.Throw(rt, err)
@@ -158,6 +128,29 @@ func (c *client) publishSync(
 		return err
 	}
 	return nil
+}
+
+func (c *client) createProducer(topic string) (pulsar.Producer, error) {
+	if c.pulsarProducer != nil && c.pulsarProducer.Topic() == topic {
+		// if the producer is already created for the topic, just return it
+		return c.pulsarProducer, nil
+	} else if c.pulsarProducer != nil {
+		return nil, fmt.Errorf("cannot create multiple producers using one client - producer already exists for topic %s, cannot create another one for %s", c.pulsarProducer.Topic(), topic)
+	}
+
+	opts := pulsar.ProducerOptions{
+		Topic:       topic,
+		Name:        c.conf.name,
+		SendTimeout: time.Duration(c.conf.publishTimeout) * time.Millisecond,
+	}
+
+	producer, err := c.pulsarClient.CreateProducer(opts)
+	if err != nil {
+		return nil, err
+	}
+	c.pulsarProducer = producer
+
+	return producer, nil
 }
 
 func (c *client) publishMessageMetric(msgLen float64) error {

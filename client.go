@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/apache/pulsar-client-go/pulsar"
@@ -24,11 +23,9 @@ type client struct {
 	conf         conf
 	pulsarClient pulsar.Client
 
-	pulsarProducers   map[string]pulsar.Producer
-	pulsarProducersMU sync.Mutex
+	pulsarProducer pulsar.Producer
 
-	pulsarConsumers   map[string]pulsar.Consumer
-	pulsarConsumersMU sync.Mutex
+	pulsarConsumer pulsar.Consumer
 
 	obj *sobek.Object // the object that is given to js to interact with the WebSocket
 
@@ -38,6 +35,9 @@ type client struct {
 	messageListener func(sobek.Value) (sobek.Value, error)
 	errorListener   func(sobek.Value) (sobek.Value, error)
 	tq              *taskqueue.TaskQueue
+
+	subRefCount int64 // reference count for subscribe, used to exit the loop when this count is reached
+	subDuration int64 // duration in milliseconds to keep listening for messages
 }
 
 type conf struct {
@@ -224,11 +224,6 @@ func (m *PulsarAPI) client(c sobek.ConstructorCall) *sobek.Object {
 		metrics: &metrics,
 		conf:    clientConf,
 		obj:     rt.NewObject(),
-
-		pulsarProducers:   make(map[string]pulsar.Producer),
-		pulsarProducersMU: sync.Mutex{},
-		pulsarConsumers:   make(map[string]pulsar.Consumer),
-		pulsarConsumersMU: sync.Mutex{},
 	}
 
 	m.defineRuntimeMethods(client)
@@ -255,6 +250,8 @@ func (m *PulsarAPI) defineRuntimeMethods(client *client) {
 	// TODO add onmessage,onclose and so on
 	must(client.obj.DefineDataProperty(
 		"addEventListener", rt.ToValue(client.AddEventListener), sobek.FLAG_FALSE, sobek.FLAG_FALSE, sobek.FLAG_TRUE))
+	must(client.obj.DefineDataProperty(
+		"subContinue", rt.ToValue(client.SubContinue), sobek.FLAG_FALSE, sobek.FLAG_FALSE, sobek.FLAG_TRUE))
 	must(client.obj.DefineDataProperty(
 		"connect", rt.ToValue(client.Connect), sobek.FLAG_FALSE, sobek.FLAG_FALSE, sobek.FLAG_TRUE))
 	must(client.obj.DefineDataProperty(
@@ -356,18 +353,18 @@ func (c *client) Close() {
 		c.tq.Close()
 	}
 
-	// close all producers
-	for key, producer := range c.pulsarProducers {
-		producer.FlushWithCtx(c.vu.Context())
-		producer.Close()
-		c.pulsarProducers[key] = nil
+	// close producer
+	if c.pulsarProducer != nil {
+		c.pulsarProducer.FlushWithCtx(c.vu.Context())
+		c.pulsarProducer.Close()
+		c.pulsarProducer = nil
 	}
 
-	// close all consumers
-	for key, consumer := range c.pulsarConsumers {
-		consumer.UnsubscribeForce()
-		consumer.Close()
-		c.pulsarConsumers[key] = nil
+	// close consumer
+	if c.pulsarConsumer != nil {
+		c.pulsarConsumer.UnsubscribeForce()
+		c.pulsarConsumer.Close()
+		c.pulsarConsumer = nil
 	}
 
 	// disconnect client

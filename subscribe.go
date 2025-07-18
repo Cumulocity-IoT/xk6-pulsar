@@ -13,49 +13,6 @@ import (
 	"go.k6.io/k6/metrics"
 )
 
-func (c *client) createConsumerIfNotPresent(topic, topicsPattern, subscriptionType, initialPosition string) (pulsar.Consumer, error) {
-	if topic != "" && topicsPattern != "" {
-		return nil, fmt.Errorf("both topic and topicsPattern are set, only one should be used")
-	}
-
-	var consumerKey string
-	if topicsPattern != "" {
-		consumerKey = topicsPattern
-	} else {
-		consumerKey = topic
-	}
-
-	var err error
-	var ok bool
-	var consumer pulsar.Consumer
-	consumer, ok = c.pulsarConsumers[consumerKey]
-	if !ok {
-		c.pulsarConsumersMU.Lock()
-		defer c.pulsarConsumersMU.Unlock()
-
-		consumer, ok = c.pulsarConsumers[consumerKey]
-		if !ok {
-			opts := pulsar.ConsumerOptions{
-				Topic:                       topic,
-				TopicsPattern:               topicsPattern,
-				Name:                        c.conf.name,
-				SubscriptionName:            c.conf.name,
-				Type:                        stringToSubscriptionType(subscriptionType),
-				SubscriptionInitialPosition: stringToSubscriptionInitialPosition(initialPosition),
-			}
-
-			consumer, err = c.pulsarClient.Subscribe(opts)
-			if err != nil {
-				return nil, err
-			}
-
-			c.pulsarConsumers[consumerKey] = consumer
-		}
-	}
-
-	return consumer, nil
-}
-
 // Subscribe to the given topic message will be received using addEventListener
 func (c *client) Subscribe(
 	// Topic to consume messages from
@@ -67,8 +24,54 @@ func (c *client) Subscribe(
 	// Initial position of the cursor, can be "earliest" or "latest" (defaults to "latest")
 	initialPosition string,
 ) error {
+	c.subRefCount = 0 // reset the reference count for subscribe
+	c.subDuration = 0 // reset the duration for subscribe
+
+	go c.subscriptionLoop(topic, topicsPattern, subscriptionType, initialPosition)
+	return nil
+}
+
+func (c *client) createConsumer(topic, topicsPattern, subscriptionType, initialPosition string) (pulsar.Consumer, error) {
+	if topic != "" && topicsPattern != "" {
+		return nil, fmt.Errorf("both topic and topicsPattern are set, only one should be used")
+	}
+
+	var subscriptionName string
+	if topicsPattern != "" {
+		subscriptionName = topicsPattern
+	} else {
+		subscriptionName = topic
+	}
+
+	if c.pulsarConsumer != nil && c.pulsarConsumer.Subscription() == subscriptionName {
+		// if the consumer is already created for the topic, just return it
+		return c.pulsarConsumer, nil
+	} else if c.pulsarConsumer != nil {
+		return nil, fmt.Errorf("cannot create multiple consumers using one client - consumer already exists for topic %s, cannot create another one for %s", c.pulsarConsumer.Subscription(), subscriptionName)
+	}
+
+	opts := pulsar.ConsumerOptions{
+		Topic:                       topic,
+		TopicsPattern:               topicsPattern,
+		Name:                        c.conf.name,
+		SubscriptionName:            subscriptionName,
+		Type:                        stringToSubscriptionType(subscriptionType),
+		SubscriptionInitialPosition: stringToSubscriptionInitialPosition(initialPosition),
+	}
+
+	consumer, err := c.pulsarClient.Subscribe(opts)
+	if err != nil {
+		return nil, err
+	}
+	c.pulsarConsumer = consumer
+
+	return consumer, nil
+}
+
+//nolint:gocognit // todo improve this
+func (c *client) subscriptionLoop(topic, topicsPattern, subscriptionType, initialPosition string) error {
 	rt := c.vu.Runtime()
-	consumer, err := c.createConsumerIfNotPresent(topic, topicsPattern, subscriptionType, initialPosition)
+	consumer, err := c.createConsumer(topic, topicsPattern, subscriptionType, initialPosition)
 	if err != nil {
 		err = errors.Join(ErrConnect, err)
 		common.Throw(rt, err)
@@ -82,8 +85,86 @@ func (c *client) Subscribe(
 		}
 	}
 	c.tq = taskqueue.New(registerCallback)
-	go c.loop(consumer)
-	return nil
+	defer c.tq.Close()
+
+	ctx := c.vu.Context()
+	stop := make(chan struct{})
+
+	var timeoutChan <-chan time.Time
+	if c.subDuration > 0 {
+		timeoutChan = time.After(time.Millisecond * time.Duration(c.subDuration))
+	}
+
+	for {
+		select {
+		case msg, ok := <-consumer.Chan():
+			if !ok {
+				// wanted exit in case of chan close
+				return nil
+			}
+			c.tq.Queue(func() error {
+				payload := string(msg.Payload())
+
+				// ACK the message
+				if err := consumer.Ack(msg); err != nil {
+					if c.errorListener != nil {
+						ev := c.newErrorEvent(fmt.Errorf("failed to ack message: %w", err).Error())
+						if _, err := c.errorListener(ev); err != nil {
+							// only seen in case of sigint
+							return err
+						}
+					}
+				}
+
+				// publish associated metric
+				err := c.receiveMessageMetric(float64(len(payload)))
+				if err != nil {
+					return err
+				}
+
+				if c.messageListener != nil {
+					ev := c.newMessageEvent(msg.Topic(), payload)
+					if _, err := c.messageListener(ev); err != nil {
+						return err
+					}
+				}
+
+				// if the client is waiting for multiple messages
+				// TODO handle multiple // subscribe case
+				if c.subRefCount > 0 {
+					c.subRefCount--
+				} else {
+					// exit the handle from evloop async
+					stop <- struct{}{}
+				}
+
+				return nil
+			})
+		case <-stop:
+			return nil
+		case <-ctx.Done():
+			c.tq.Queue(func() error {
+				if c.errorListener != nil {
+					ev := c.newErrorEvent("message vu cancel occurred")
+					if _, err := c.errorListener(ev); err != nil {
+						// only seen in case of sigint
+						return err
+					}
+				}
+				return nil
+			})
+			return nil
+
+		case <-timeoutChan:
+			c.tq.Queue(func() error {
+				// exit the handle from evloop async
+				stop <- struct{}{}
+
+				return nil
+			})
+			return nil
+		}
+	}
 }
 
 func (c *client) receiveMessageMetric(msgLen float64) error {
@@ -116,65 +197,6 @@ func (c *client) receiveMessageMetric(msgLen float64) error {
 	return nil
 }
 
-//nolint:gocognit // todo improve this
-func (c *client) loop(consumer pulsar.Consumer) {
-	ctx := c.vu.Context()
-	stop := make(chan struct{})
-	defer c.tq.Close()
-	for {
-		select {
-		case msg, ok := <-consumer.Chan():
-			if !ok {
-				// wanted exit in case of chan close
-				return
-			}
-			c.tq.Queue(func() error {
-				payload := string(msg.Payload())
-
-				// ACK the message
-				if err := consumer.Ack(msg); err != nil {
-					if c.errorListener != nil {
-						ev := c.newErrorEvent(fmt.Errorf("failed to ack message: %w", err).Error())
-						if _, err := c.errorListener(ev); err != nil {
-							// only seen in case of sigint
-							return err
-						}
-					}
-				}
-
-				// publish associated metric
-				err := c.receiveMessageMetric(float64(len(payload)))
-				if err != nil {
-					return err
-				}
-
-				if c.messageListener != nil {
-					ev := c.newMessageEvent(msg.Topic(), payload)
-					if _, err := c.messageListener(ev); err != nil {
-						return err
-					}
-				}
-
-				return nil
-			})
-		case <-stop:
-			return
-		case <-ctx.Done():
-			c.tq.Queue(func() error {
-				if c.errorListener != nil {
-					ev := c.newErrorEvent("message vu cancel occurred")
-					if _, err := c.errorListener(ev); err != nil {
-						// only seen in case of sigint
-						return err
-					}
-				}
-				return nil
-			})
-			return
-		}
-	}
-}
-
 // AddEventListener expose the js method to listen for events
 func (c *client) AddEventListener(event string, listener func(sobek.Value) (sobek.Value, error)) {
 	switch event {
@@ -186,6 +208,12 @@ func (c *client) AddEventListener(event string, listener func(sobek.Value) (sobe
 		rt := c.vu.Runtime()
 		common.Throw(rt, errors.New("event: "+event+" does not exists"))
 	}
+}
+
+// SubContinue to be call in message callback to wait for on more message
+// be careful this must be called only in the event loop and it not thread safe
+func (c *client) SubContinue() {
+	c.subRefCount++
 }
 
 //nolint:nosnakecase // their choice not mine
