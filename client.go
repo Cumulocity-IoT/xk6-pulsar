@@ -265,7 +265,10 @@ func (m *PulsarAPI) defineRuntimeMethods(client *client) {
 	must(client.obj.DefineDataProperty(
 		"subscribe", rt.ToValue(client.Subscribe), sobek.FLAG_FALSE, sobek.FLAG_FALSE, sobek.FLAG_TRUE))
 	must(client.obj.DefineDataProperty(
+		"subscribeForDuration", rt.ToValue(client.SubscribeForDuration), sobek.FLAG_FALSE, sobek.FLAG_FALSE, sobek.FLAG_TRUE))
+	must(client.obj.DefineDataProperty(
 		"close", rt.ToValue(client.Close), sobek.FLAG_FALSE, sobek.FLAG_FALSE, sobek.FLAG_TRUE))
+
 }
 
 // Connect create a connection to pulsar
