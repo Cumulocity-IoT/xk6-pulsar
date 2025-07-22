@@ -17,12 +17,12 @@ import (
 )
 
 type client struct {
-	vu            modules.VU
-	env           *common.InitEnvironment
-	metricsLabels pulsarMetricsLabels
-	metrics       *pulsarMetrics
-	conf          conf
-	pulsarClient  pulsar.Client
+	vu              modules.VU
+	initEnvironment *common.InitEnvironment
+	metricsLabels   pulsarMetricsLabels
+	metrics         *pulsarMetrics
+	conf            conf
+	pulsarClient    pulsar.Client
 
 	pulsarProducer pulsar.Producer
 
@@ -216,12 +216,11 @@ func (m *PulsarAPI) client(c sobek.ConstructorCall) *sobek.Object {
 	labels := getLabels(c.Argument(13), rt)
 
 	client := &client{
-		vu:  m.vu,
-		env: m.vu.InitEnv(),
-
-		metricsLabels: labels,
-		conf:          clientConf,
-		obj:           rt.NewObject(),
+		vu:              m.vu,
+		initEnvironment: m.initEnvironment,
+		metricsLabels:   labels,
+		conf:            clientConf,
+		obj:             rt.NewObject(),
 	}
 
 	m.defineRuntimeMethods(client)
@@ -272,7 +271,7 @@ func (m *PulsarAPI) defineRuntimeMethods(client *client) {
 // Connect create a connection to pulsar
 func (c *client) Connect() error {
 	if c.metrics == nil {
-		metrics, err := registerMetrics(c.env, c.metricsLabels)
+		metrics, err := registerMetrics(c.initEnvironment, c.metricsLabels)
 		if err != nil {
 			common.Throw(c.vu.Runtime(), err)
 		}
