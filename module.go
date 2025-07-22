@@ -1,6 +1,7 @@
 package pulsar
 
 import (
+	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/js/modules"
 )
 
@@ -13,13 +14,14 @@ func init() {
 
 // PulsarAPI is the k6 extension implementing the Pulsar api
 type PulsarAPI struct { //nolint:revive
-	vu modules.VU
+	vu              modules.VU
+	initEnvironment *common.InitEnvironment
 }
 
 // NewModuleInstance implements the modules.Module interface and returns
 // a new instance for each VU.
 func (*RootModule) NewModuleInstance(vu modules.VU) modules.Instance {
-	return &PulsarAPI{vu: vu}
+	return &PulsarAPI{vu: vu, initEnvironment: vu.InitEnv()}
 }
 
 // Exports exposes the given object in ts
