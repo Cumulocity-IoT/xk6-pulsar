@@ -17,10 +17,12 @@ import (
 )
 
 type client struct {
-	vu           modules.VU
-	metrics      *pulsarMetrics
-	conf         conf
-	pulsarClient pulsar.Client
+	vu            modules.VU
+	env           *common.InitEnvironment
+	metricsLabels pulsarMetricsLabels
+	metrics       *pulsarMetrics
+	conf          conf
+	pulsarClient  pulsar.Client
 
 	pulsarProducer pulsar.Producer
 
@@ -212,16 +214,14 @@ func (m *PulsarAPI) client(c sobek.ConstructorCall) *sobek.Object {
 	}
 
 	labels := getLabels(c.Argument(13), rt)
-	metrics, err := registerMetrics(m.vu, labels)
-	if err != nil {
-		common.Throw(m.vu.Runtime(), err)
-	}
 
 	client := &client{
-		vu:      m.vu,
-		metrics: &metrics,
-		conf:    clientConf,
-		obj:     rt.NewObject(),
+		vu:  m.vu,
+		env: m.vu.InitEnv(),
+
+		metricsLabels: labels,
+		conf:          clientConf,
+		obj:           rt.NewObject(),
 	}
 
 	m.defineRuntimeMethods(client)
@@ -271,6 +271,15 @@ func (m *PulsarAPI) defineRuntimeMethods(client *client) {
 
 // Connect create a connection to pulsar
 func (c *client) Connect() error {
+	if c.metrics == nil {
+		metrics, err := registerMetrics(c.env, c.metricsLabels)
+		if err != nil {
+			common.Throw(c.vu.Runtime(), err)
+		}
+
+		c.metrics = &metrics
+	}
+
 	opts := pulsar.ClientOptions{}
 
 	// check timeout value

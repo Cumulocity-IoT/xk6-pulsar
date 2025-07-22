@@ -3,7 +3,7 @@ package pulsar
 import (
 	"errors"
 
-	"go.k6.io/k6/js/modules"
+	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/metrics"
 )
 
@@ -27,10 +27,9 @@ type pulsarMetricsLabels struct {
 }
 
 // registerMetrics registers the metrics for the pulsar module in the metrics registry
-func registerMetrics(vu modules.VU, labels pulsarMetricsLabels) (pulsarMetrics, error) {
+func registerMetrics(env *common.InitEnvironment, labels pulsarMetricsLabels) (pulsarMetrics, error) {
 	var err error
 	m := pulsarMetrics{}
-	env := vu.InitEnv()
 	if env == nil {
 		return m, errors.New("missing env")
 	}
