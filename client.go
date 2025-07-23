@@ -212,9 +212,9 @@ func (m *PulsarAPI) client(c sobek.ConstructorCall) *sobek.Object {
 	}
 
 	labels := getLabels(c.Argument(13), rt)
-	metrics, err := registerMetrics(m.vu, labels)
+	metrics, err := registerMetrics(m.initEnvironment, labels)
 	if err != nil {
-		common.Throw(m.vu.Runtime(), err)
+		common.Throw(rt, err)
 	}
 
 	client := &client{
