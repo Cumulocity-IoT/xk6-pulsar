@@ -13,7 +13,7 @@ func (c *client) SubscribeForDuration(
 	topic string,
 	// A regular expression to subscribe to multiple topics under the same namespace
 	topicsPattern string,
-	// Subscription type, can be "exclusive", "shared", "failover" or "keyshared" (defaults to "keyshared")
+	// Subscription type, can be "Exclusive", "Shared", "Failover" or "Key_Shared" (defaults to "Key_Shared")
 	subscriptionType string,
 	// Initial position of the cursor, can be "earliest" or "latest" (defaults to "latest")
 	initialPosition string,
