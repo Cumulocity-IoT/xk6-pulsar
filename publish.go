@@ -28,69 +28,67 @@ func (c *client) Publish(
 
 	// async case
 	callback := c.vu.RegisterCallback()
-	go func() {
-		publisher, err := c.createProducer(topic)
-		if err != nil {
-			callback(func() error {
-				if failure != nil {
-					ev := c.newErrorEvent(fmt.Sprintf("publisher not connected: %w", err))
-					if _, err := failure(ev); err != nil {
-						return err
-					}
+	publisher, err := c.createProducer(topic)
+	if err != nil {
+		callback(func() error {
+			if failure != nil {
+				ev := c.newErrorEvent(fmt.Sprintf("publisher not connected: %w", err))
+				if _, err := failure(ev); err != nil {
+					return err
 				}
-				return nil
-			})
-			return
-		}
+			}
+			return nil
+		})
+		return err
+	}
 
-		ctx := c.vu.Context()
-		if ctx == nil {
-			callback(func() error {
-				if failure != nil {
-					ev := c.newErrorEvent(ErrState.Error())
-					if _, err := failure(ev); err != nil {
-						return err
-					}
+	ctx := c.vu.Context()
+	if ctx == nil {
+		callback(func() error {
+			if failure != nil {
+				ev := c.newErrorEvent(ErrState.Error())
+				if _, err := failure(ev); err != nil {
+					return err
 				}
-				return nil
-			})
-			return
-		}
-		publisher.SendAsync(ctx,
-			&pulsar.ProducerMessage{
-				Payload:    []byte(message),
-				Properties: messageProperties,
-			},
-			func(id pulsar.MessageID, msg *pulsar.ProducerMessage, err error) {
-				if err != nil {
-					callback(func() error {
-						if failure != nil {
-							ev := c.newErrorEvent(errors.Join(ErrPublish, err).Error())
-							if _, err := failure(ev); err != nil {
-								return err
-							}
-						}
-						return nil
-					})
-					return
-				}
-
+			}
+			return nil
+		})
+		return nil
+	}
+	publisher.SendAsync(ctx,
+		&pulsar.ProducerMessage{
+			Payload:    []byte(message),
+			Properties: messageProperties,
+		},
+		func(id pulsar.MessageID, msg *pulsar.ProducerMessage, err error) {
+			if err != nil {
 				callback(func() error {
-					err := c.publishMessageMetric(float64(len(message)))
-					if err != nil {
-						return err
-					}
-					ev := c.newPublishEvent(topic)
-					if success != nil {
-						if _, err := success(ev); err != nil {
+					if failure != nil {
+						ev := c.newErrorEvent(errors.Join(ErrPublish, err).Error())
+						if _, err := failure(ev); err != nil {
 							return err
 						}
 					}
 					return nil
 				})
-			},
-		)
-	}()
+				return
+			}
+
+			callback(func() error {
+				err := c.publishMessageMetric(float64(len(message)))
+				if err != nil {
+					return err
+				}
+				ev := c.newPublishEvent(topic)
+				if success != nil {
+					if _, err := success(ev); err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+		},
+	)
 
 	return nil
 }
