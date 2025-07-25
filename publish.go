@@ -53,7 +53,7 @@ func (c *client) Publish(
 			}
 			return nil
 		})
-		return nil
+		return ErrState
 	}
 	publisher.SendAsync(ctx,
 		&pulsar.ProducerMessage{
