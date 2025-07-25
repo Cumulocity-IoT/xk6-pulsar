@@ -18,7 +18,7 @@ func (c *client) Subscribe(
 	topic string,
 	// A regular expression to subscribe to multiple topics under the same namespace
 	topicsPattern string,
-	// Subscription type, can be "exclusive", "shared", "failover" or "keyshared" (defaults to "keyshared")
+	// Subscription type, can be "Exclusive", "Shared", "Failover" or "Key_Shared" (defaults to "Key_Shared")
 	subscriptionType string,
 	// Initial position of the cursor, can be "earliest" or "latest" (defaults to "latest")
 	initialPosition string,
@@ -221,7 +221,7 @@ func stringToSubscriptionType(s string) pulsar.SubscriptionType {
 		return pulsar.Shared
 	case "failover":
 		return pulsar.Failover
-	case "keyshared":
+	case "key_shared":
 		return pulsar.KeyShared
 	default:
 		// If the string doesn't match any known constant, return pulsar.KeyShared value
