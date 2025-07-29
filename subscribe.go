@@ -56,6 +56,7 @@ func (c *client) createConsumer(topic, topicsPattern, subscriptionType, initialP
 		SubscriptionName:            subscriptionName,
 		Type:                        stringToSubscriptionType(subscriptionType),
 		SubscriptionInitialPosition: stringToSubscriptionInitialPosition(initialPosition),
+		SubscriptionMode:            c.conf.subscriptionMode,
 	}
 
 	consumer, err := c.pulsarClient.Subscribe(opts)
