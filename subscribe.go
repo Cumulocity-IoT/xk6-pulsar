@@ -22,15 +22,17 @@ func (c *client) Subscribe(
 	subscriptionType string,
 	// Initial position of the cursor, can be "earliest" or "latest" (defaults to "latest")
 	initialPosition string,
+	// Subscription mode, can be "Durable" or "NonDurable" (defaults to "NonDurable")
+	subscriptionMode string,
 ) error {
 	c.subRefCount = 0 // reset the reference count for subscribe
 	c.subDuration = 0 // reset the duration for subscribe
 
-	go c.subscriptionLoop(topic, topicsPattern, subscriptionType, initialPosition)
+	go c.subscriptionLoop(topic, topicsPattern, subscriptionType, initialPosition, subscriptionMode)
 	return nil
 }
 
-func (c *client) createConsumer(topic, topicsPattern, subscriptionType, initialPosition string) (pulsar.Consumer, error) {
+func (c *client) createConsumer(topic, topicsPattern, subscriptionType, initialPosition, subscriptionMode string) (pulsar.Consumer, error) {
 	if topic != "" && topicsPattern != "" {
 		return nil, fmt.Errorf("both topic and topicsPattern are set, only one should be used")
 	}
@@ -56,7 +58,7 @@ func (c *client) createConsumer(topic, topicsPattern, subscriptionType, initialP
 		SubscriptionName:            subscriptionName,
 		Type:                        stringToSubscriptionType(subscriptionType),
 		SubscriptionInitialPosition: stringToSubscriptionInitialPosition(initialPosition),
-		SubscriptionMode:            c.conf.subscriptionMode,
+		SubscriptionMode:            stringToSubscriptionMode(subscriptionMode),
 	}
 
 	consumer, err := c.pulsarClient.Subscribe(opts)
@@ -229,6 +231,24 @@ func stringToSubscriptionType(s string) pulsar.SubscriptionType {
 		return pulsar.KeyShared
 	}
 }
+
+// stringToSubscriptionMode converts a string to a SubscriptionMode constant.
+// It returns the corresponding constant.
+func stringToSubscriptionMode(s string) pulsar.SubscriptionMode {
+	// Convert the input string to lowercase for case-insensitive matching
+	lowerS := strings.ToLower(s)
+
+	switch lowerS {
+	case "durable":
+		return pulsar.Durable
+	case "nondurable":
+		return pulsar.NonDurable
+	default:
+		// If the string doesn't match any known constant, return pulsar.NonDurable value
+		return pulsar.NonDurable
+	}
+}
+
 
 // stringToSubscriptionInitialPosition converts a string to a SubscriptionInitialPosition constant.
 // It returns the corresponding constant.

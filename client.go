@@ -63,8 +63,6 @@ type conf struct {
 	tlsMinVersion uint16
 	// publishTimeout in ms
 	publishTimeout uint
-	// subscriptionMode, can be "Durable" or "NonDurable"
-	subscriptionMode pulsar.SubscriptionMode
 }
 
 const (
@@ -217,19 +215,6 @@ func (m *PulsarAPI) client(c sobek.ConstructorCall) *sobek.Object {
 	metrics, err := registerMetrics(m.initEnvironment, labels)
 	if err != nil {
 		common.Throw(rt, err)
-	}
-
-	if subscriptionMode := c.Argument(14); isNilOrUndefined(subscriptionMode) {
-		clientConf.subscriptionMode = pulsar.NonDurable
-	} else {
-		if subscriptionMode.String() != "Durable" && subscriptionMode.String() != "NonDurable" {
-			common.Throw(rt, fmt.Errorf("invalid subscription mode %s, must be 'Durable' or 'NonDurable'", subscriptionMode.String()))
-		}
-		if subscriptionMode.String() == "Durable" {
-			clientConf.subscriptionMode = pulsar.Durable
-		} else {
-			clientConf.subscriptionMode = pulsar.NonDurable
-		}
 	}
 
 	client := &client{
