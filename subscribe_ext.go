@@ -17,6 +17,8 @@ func (c *client) SubscribeForDuration(
 	subscriptionType string,
 	// Initial position of the cursor, can be "earliest" or "latest" (defaults to "latest")
 	initialPosition string,
+	// Subscription mode, can be "Durable" or "NonDurable" (defaults to "NonDurable")
+	subscriptionMode string,
 ) error {
 	if durationMillis < 0 && maxMessageCount == UnlimitedMessageCount {
 		return fmt.Errorf("invalid parameters: either durationMillis or maxMessageCount must be >= 0")
@@ -34,5 +36,5 @@ func (c *client) SubscribeForDuration(
 		c.subDuration = 0 // if duration is 0, we will run indefinitely
 	}
 
-	return c.subscriptionLoop(topic, topicsPattern, subscriptionType, initialPosition)
+	return c.subscriptionLoop(topic, topicsPattern, subscriptionType, initialPosition, subscriptionMode)
 }

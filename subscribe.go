@@ -71,9 +71,9 @@ func (c *client) createConsumer(topic, topicsPattern, subscriptionType, initialP
 }
 
 //nolint:gocognit // todo improve this
-func (c *client) subscriptionLoop(topic, topicsPattern, subscriptionType, initialPosition string) error {
+func (c *client) subscriptionLoop(topic, topicsPattern, subscriptionType, initialPosition, subscriptionMode string) error {
 	rt := c.vu.Runtime()
-	consumer, err := c.createConsumer(topic, topicsPattern, subscriptionType, initialPosition)
+	consumer, err := c.createConsumer(topic, topicsPattern, subscriptionType, initialPosition, subscriptionMode)
 	if err != nil {
 		err = errors.Join(ErrConnect, err)
 		common.Throw(rt, err)
